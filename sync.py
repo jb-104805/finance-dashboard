@@ -22,7 +22,7 @@ PLAID_CLIENT_ID = os.environ["PLAID_CLIENT_ID"]
 PLAID_SECRET    = os.environ["PLAID_PRODUCTION_SECRET"]
 ENCRYPTION_KEY  = os.environ["ENCRYPTION_KEY"]
 GIST_ID         = os.environ["GIST_ID"]
-GH_TOKEN        = os.environ["GH_TOKEN"]
+GH_TOKEN        = os.environ["GH_TOKEN"].strip()
 GIST_FILE       = "dashboard.json"
 
 fernet = Fernet(ENCRYPTION_KEY.encode())
