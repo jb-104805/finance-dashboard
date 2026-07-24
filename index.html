@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finance</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <span class="wordmark">Finance</span>
+  <button class="btn-sync" id="sync-btn" onclick="triggerSync()">Sync</button>
+</header>
+
+<div id="status-bar"></div>
+<div id="loading-msg">Loading…</div>
+<div id="main" class="hidden">
+
+  <section class="numbers-grid">
+    <div class="number-card">
+      <span class="n-label">NOW</span>
+      <span class="n-amount" id="now-amount">—</span>
+      <span class="n-sub">checking minus cards</span>
+    </div>
+    <div class="number-card">
+      <span class="n-label">PROJECTED</span>
+      <span class="n-amount" id="proj-amount">—</span>
+      <span class="n-sub">after pending items</span>
+    </div>
+  </section>
+
+  <section class="card breakdown" id="breakdown"></section>
+  <section class="card" id="commitments-card"></section>
+  <section class="card" id="income-card"></section>
+  <section class="card" id="transactions-card"></section>
+
+  <div class="page-foot">Tags: numbers (1, 2 …) link to commitments · letters (A, B …) link to income</div>
+  <div class="page-foot"><a href="#" onclick="resetPAT();return false;" style="color:var(--muted);">Reset saved token</a></div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG — fill these in after running setup.py
+// ─────────────────────────────────────────────────────────────────────────────
+const CONFIG = {
+  GIST_ID:    "4d4ade316c356039cd5728467220df3f",
+  REPO_OWNER: "jb-104805",
+  REPO_NAME:  "finance-dashboard",
+};
+
+function getPAT() {
+  return localStorage.getItem('gh_pat') || '';
+}
+
+function promptForPAT() {
+  const pat = prompt(
+    'Enter your GitHub Personal Access Token.\n' +
+    'It will be saved on this device only and never sent anywhere except GitHub.'
+  );
+  if (pat && pat.trim()) {
+    localStorage.setItem('gh_pat', pat.trim());
+    return pat.trim();
+  }
+  return '';
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+let state = null;  // live copy of dashboard.json
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmt(v) {
+  const sign = v < 0 ? '-' : '';
+  return `${sign}$${Math.abs(v).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function setStatus(msg, isError = false) {
+  const el = document.getElementById('status-bar');
+  el.textContent = msg;
+  el.className = isError ? 'error' : '';
+}
+
+function currentMonth() {
+  return new Date().toISOString().slice(0, 7);  // "2026-07"
+}
+
+function isVerified(tag) {
+  const month = currentMonth();
+  return (state.transactions || []).some(t =>
+    t.tag && t.tag.toUpperCase() === tag.toUpperCase() &&
+    t.date.slice(0, 7) === month
+  );
+}
+
+function calcNow() {
+  const cc = (state.cc_cards || []).reduce((s, c) => s + c.balance, 0);
+  return (state.checking || 0) - cc;
+}
+
+function calcProjected() {
+  const now = calcNow();
+  let pendingOut = 0, pendingIn = 0;
+  (state.commitments || []).forEach((c, i) => {
+    if (!isVerified(String(i + 1))) pendingOut += c.amount;
+  });
+  (state.income || []).forEach((inc, i) => {
+    if (!isVerified(String.fromCharCode(65 + i))) pendingIn += inc.amount;
+  });
+  return now + pendingIn - pendingOut;
+}
+
+function displayTxns() {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 45);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const acctMap   = Object.fromEntries((state.accounts || []).map(a => [a.id, a]));
+  const included  = new Set((state.accounts || []).filter(a => a.include).map(a => a.id));
+
+  return (state.transactions || [])
+    .filter(t => t.date >= cutoffStr && included.has(t.acct_id))
+    .sort((a, b) => {
+      if (b.date !== a.date) return b.date.localeCompare(a.date);
+      return (b.pending ? 1 : 0) - (a.pending ? 1 : 0);
+    })
+    .map(t => ({ ...t, account_name: acctMap[t.acct_id]?.name || 'Unknown' }));
+}
+
+// ── Gist API ─────────────────────────────────────────────────────────────────
+
+async function fetchState() {
+  const r = await fetch(`https://api.github.com/gists/${CONFIG.GIST_ID}`, {
+    headers: { Authorization: `token ${getPAT()}` },
+    cache: 'no-store',
+  });
+  if (!r.ok) throw new Error(`Gist fetch failed (${r.status})`);
+  const data = await r.json();
+  return JSON.parse(data.files['dashboard.json'].content);
+}
+
+async function patchGist() {
+  const r = await fetch(`https://api.github.com/gists/${CONFIG.GIST_ID}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `token ${getPAT()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      files: { 'dashboard.json': { content: JSON.stringify(state, null, 2) } }
+    }),
+  });
+  if (!r.ok) throw new Error(`Gist save failed (${r.status})`);
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+
+function renderNumbers() {
+  const now  = calcNow();
+  const proj = calcProjected();
+
+  const nowEl  = document.getElementById('now-amount');
+  const projEl = document.getElementById('proj-amount');
+  nowEl.textContent  = fmt(now);
+  projEl.textContent = fmt(proj);
+  nowEl.className    = 'n-amount ' + (now  < 0 ? 'neg' : 'pos');
+  projEl.className   = 'n-amount ' + (proj < 0 ? 'neg' : 'pos');
+}
+
+function renderBreakdown() {
+  const rows = [
+    `<div class="b-row"><span>Checking</span><span class="pos">${fmt(state.checking || 0)}</span></div>`,
+    ...(state.cc_cards || []).map(c =>
+      `<div class="b-row"><span>${escHtml(c.name)}</span><span class="neg">-${fmt(c.balance)}</span></div>`
+    ),
+  ].join('');
+  document.getElementById('breakdown').innerHTML = rows || '<div class="b-row"><span class="muted">No accounts found.</span></div>';
+}
+
+function renderCommitments() {
+  const items = (state.commitments || []).map((c, i) => {
+    const tag     = String(i + 1);
+    const ok      = isVerified(tag);
+    const badge   = ok ? '<span class="badge badge-ok">✓</span>' : '<span class="badge badge-est">est</span>';
+    const amt     = c.amount.toFixed(0);
+    return `
+    <div class="list-row">
+      <span class="row-index">${tag}</span>
+      <input class="edit-desc" type="text" value="${escHtml(c.description)}"
+             onblur="saveCommitmentDesc(${c.id}, this.value)">
+      <div class="row-right">
+        <span class="currency-prefix">$</span>
+        <input class="edit-amt" type="text" inputmode="decimal" value="${amt}"
+               onblur="saveCommitmentAmt(${c.id}, this.value)">
+        ${badge}
+        <button class="btn-del" onclick="deleteItem('commitments', ${c.id})">×</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('commitments-card').innerHTML = `
+    <div class="section-head">
+      <h2>Commitments</h2>
+      <button class="btn-toggle" onclick="toggleForm('add-commitment')">+ Add</button>
+    </div>
+    ${items || '<p class="empty">No commitments yet.</p>'}
+    <div id="add-commitment" class="add-form hidden">
+      <div class="add-row">
+        <input type="text" id="new-comm-desc" placeholder="Description">
+        <input type="number" id="new-comm-amt" placeholder="Amount" step="0.01" min="0">
+        <button class="btn-save" onclick="addItem('commitments')">Save</button>
+      </div>
+    </div>`;
+}
+
+function renderIncome() {
+  const items = (state.income || []).map((inc, i) => {
+    const letter  = String.fromCharCode(65 + i);
+    const ok      = isVerified(letter);
+    const badge   = ok ? '<span class="badge badge-ok">✓</span>' : '<span class="badge badge-est">est</span>';
+    const amt     = inc.amount.toFixed(0);
+    return `
+    <div class="list-row">
+      <span class="row-index letter">${letter}</span>
+      <input class="edit-desc" type="text" value="${escHtml(inc.description)}"
+             onblur="saveIncomeDesc(${inc.id}, this.value)">
+      <div class="row-right">
+        <span class="currency-prefix">$</span>
+        <input class="edit-amt" type="text" inputmode="decimal" value="${amt}"
+               onblur="saveIncomeAmt(${inc.id}, this.value)">
+        ${badge}
+        <button class="btn-del" onclick="deleteItem('income', ${inc.id})">×</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('income-card').innerHTML = `
+    <div class="section-head">
+      <h2>Income</h2>
+      <button class="btn-toggle" onclick="toggleForm('add-income')">+ Add</button>
+    </div>
+    ${items || '<p class="empty">No income entries yet.</p>'}
+    <div id="add-income" class="add-form hidden">
+      <div class="add-row">
+        <input type="text" id="new-inc-desc" placeholder="Description">
+        <input type="number" id="new-inc-amt" placeholder="Amount" step="0.01" min="0">
+        <button class="btn-save" onclick="addItem('income')">Save</button>
+      </div>
+    </div>`;
+}
+
+function renderTransactions() {
+  const txns = displayTxns();
+
+  // Build dropdown options from unique account names in the visible list
+  const names    = [...new Set(txns.map(t => t.account_name))].sort();
+  const options  = ['<option value="">All accounts</option>',
+    ...names.map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`)].join('');
+
+  const syncedFmt = state.synced_at
+    ? new Date(state.synced_at).toLocaleString('en-US', {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'})
+    : 'never';
+
+  const rows = txns.map(t => {
+    const amtClass = t.amount < 0 ? 'pos' : '';
+    const amtStr   = t.amount < 0 ? `+${fmt(t.amount * -1)}` : fmt(t.amount);
+    const dateStr  = t.date.slice(5).replace('-', '/');
+    return `
+    <div class="txn-row ${t.pending ? 'txn-pending' : ''}" data-account="${escHtml(t.account_name)}">
+      <div class="txn-left">
+        <span class="txn-date">${dateStr}</span>
+        <span class="txn-name">${escHtml(t.merchant || '')}</span>
+      </div>
+      <div class="txn-right">
+        <span class="txn-account">${escHtml(t.account_name)}</span>
+        <span class="txn-amount ${amtClass}">${amtStr}</span>
+        <input class="tag-input" type="text" maxlength="3"
+               value="${escHtml(t.tag || '')}" placeholder="—"
+               data-id="${escHtml(t.id)}"
+               onblur="saveTag(this)">
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('transactions-card').innerHTML = `
+    <div class="section-head">
+      <h2>Transactions <span class="h2-note">last 45 days</span></h2>
+      <select class="filter-account" id="account-filter" onchange="filterTransactions()">
+        ${options}
+      </select>
+    </div>
+    <div class="txn-header">
+      <span>Date · Merchant</span>
+      <span>Account · Amount · Tag</span>
+    </div>
+    ${rows || '<p class="empty">No transactions in the last 45 days.</p>'}
+    <div class="page-foot" style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px;">
+      Last synced: ${syncedFmt}
+    </div>`;
+}
+
+function render() {
+  renderNumbers();
+  renderBreakdown();
+  renderCommitments();
+  renderIncome();
+  renderTransactions();
+}
+
+// ── Load ──────────────────────────────────────────────────────────────────────
+
+async function loadDashboard() {
+  if (!getPAT()) {
+    const pat = promptForPAT();
+    if (!pat) {
+      document.getElementById('loading-msg').textContent = 'A GitHub token is required. Refresh the page to try again.';
+      return;
+    }
+  }
+  try {
+    state = await fetchState();
+    document.getElementById('loading-msg').classList.add('hidden');
+    document.getElementById('main').classList.remove('hidden');
+    render();
+    setStatus('');
+  } catch (e) {
+    document.getElementById('loading-msg').textContent = 'Failed to load. Your token may be wrong — tap below to reset it.';
+    setStatus(e.message, true);
+  }
+}
+
+function resetPAT() {
+  localStorage.removeItem('gh_pat');
+  location.reload();
+}
+
+// ── Sync (trigger GitHub Actions workflow) ────────────────────────────────────
+
+async function triggerSync() {
+  const btn = document.getElementById('sync-btn');
+  btn.disabled    = true;
+  btn.textContent = 'Starting…';
+  setStatus('Triggering sync…');
+
+  try {
+    const beforeTime = new Date().toISOString();
+
+    const trigRes = await fetch(
+      `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/actions/workflows/sync.yml/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `token ${getPAT()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ref: 'main' }),
+      }
+    );
+    if (!trigRes.ok) throw new Error(`Workflow trigger failed (${trigRes.status})`);
+
+    // Brief wait for the run to appear in the API
+    await new Promise(r => setTimeout(r, 4000));
+
+    const start = Date.now();
+    while (Date.now() - start < 300_000) {
+      const elapsed = Math.round((Date.now() - start) / 1000);
+      btn.textContent = `${elapsed}s…`;
+      setStatus(`Syncing Plaid data… ${elapsed}s`);
+
+      await new Promise(r => setTimeout(r, 6000));
+
+      const runsRes = await fetch(
+        `https://api.github.com/repos/${CONFIG.REPO_OWNER}/${CONFIG.REPO_NAME}/actions/runs?event=workflow_dispatch&per_page=5`,
+        { headers: { Authorization: `token ${getPAT()}` } }
+      );
+      if (!runsRes.ok) continue;
+
+      const runs = await runsRes.json();
+      const run  = (runs.workflow_runs || []).find(r => r.created_at > beforeTime);
+
+      if (!run) continue;
+      if (run.status === 'completed') {
+        await loadDashboard();
+        setStatus('Sync complete.');
+        break;
+      }
+    }
+  } catch (e) {
+    setStatus('Sync failed: ' + e.message, true);
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Sync';
+  }
+}
+
+// ── Interaction: tags ─────────────────────────────────────────────────────────
+
+async function saveTag(input) {
+  const id  = input.dataset.id;
+  const tag = input.value.trim().toUpperCase();
+  input.value = tag;
+
+  const txn = (state.transactions || []).find(t => t.id === id);
+  if (!txn) return;
+  txn.tag = tag;
+
+  try {
+    await patchGist();
+    renderNumbers();   // verified badges may change
+    renderCommitments();
+    renderIncome();
+  } catch (e) {
+    setStatus('Save failed: ' + e.message, true);
+  }
+}
+
+// ── Interaction: commitments ──────────────────────────────────────────────────
+
+async function saveCommitmentDesc(id, value) {
+  const c = (state.commitments || []).find(c => c.id === id);
+  if (!c || c.description === value.trim()) return;
+  c.description = value.trim();
+  try { await patchGist(); } catch (e) { setStatus('Save failed: ' + e.message, true); }
+}
+
+async function saveCommitmentAmt(id, value) {
+  const c   = (state.commitments || []).find(c => c.id === id);
+  const amt = parseFloat(value);
+  if (!c || isNaN(amt)) return;
+  c.amount = amt;
+  try {
+    await patchGist();
+    renderNumbers();
+  } catch (e) { setStatus('Save failed: ' + e.message, true); }
+}
+
+// ── Interaction: income ───────────────────────────────────────────────────────
+
+async function saveIncomeDesc(id, value) {
+  const inc = (state.income || []).find(i => i.id === id);
+  if (!inc || inc.description === value.trim()) return;
+  inc.description = value.trim();
+  try { await patchGist(); } catch (e) { setStatus('Save failed: ' + e.message, true); }
+}
+
+async function saveIncomeAmt(id, value) {
+  const inc = (state.income || []).find(i => i.id === id);
+  const amt = parseFloat(value);
+  if (!inc || isNaN(amt)) return;
+  inc.amount = amt;
+  try {
+    await patchGist();
+    renderNumbers();
+  } catch (e) { setStatus('Save failed: ' + e.message, true); }
+}
+
+// ── Add / delete items ────────────────────────────────────────────────────────
+
+async function addItem(type) {
+  const isComm   = type === 'commitments';
+  const descEl   = document.getElementById(isComm ? 'new-comm-desc' : 'new-inc-desc');
+  const amtEl    = document.getElementById(isComm ? 'new-comm-amt'  : 'new-inc-amt');
+  const desc     = descEl.value.trim();
+  const amt      = parseFloat(amtEl.value);
+  if (!desc || isNaN(amt) || amt < 0) return;
+
+  const list    = state[type] || [];
+  const nextId  = list.length ? Math.max(...list.map(x => x.id)) + 1 : 1;
+  const key     = isComm ? 'amount' : 'amount';
+  list.push({ id: nextId, description: desc, amount: amt });
+  state[type]   = list;
+
+  descEl.value = '';
+  amtEl.value  = '';
+
+  try {
+    await patchGist();
+    isComm ? renderCommitments() : renderIncome();
+    renderNumbers();
+  } catch (e) { setStatus('Save failed: ' + e.message, true); }
+}
+
+async function deleteItem(type, id) {
+  state[type] = (state[type] || []).filter(x => x.id !== id);
+  try {
+    await patchGist();
+    type === 'commitments' ? renderCommitments() : renderIncome();
+    renderNumbers();
+  } catch (e) { setStatus('Save failed: ' + e.message, true); }
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+
+function toggleForm(id) {
+  document.getElementById(id)?.classList.toggle('hidden');
+}
+
+function filterTransactions() {
+  const val = document.getElementById('account-filter')?.value || '';
+  document.querySelectorAll('.txn-row').forEach(row => {
+    row.style.display = (!val || row.dataset.account === val) ? '' : 'none';
+  });
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+loadDashboard();
+</script>
+</body>
+</html>

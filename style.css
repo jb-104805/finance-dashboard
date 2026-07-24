@@ -1,0 +1,394 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #f2f2f7;
+  --card:    #ffffff;
+  --text:    #1c1c1e;
+  --muted:   #8e8e93;
+  --pos:     #1a8a4a;
+  --neg:     #c0392b;
+  --blue:    #0071e3;
+  --border:  #e5e5ea;
+  --r:       14px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  max-width: 430px;
+  margin: 0 auto;
+  padding: 12px 12px 40px;
+  font-size: 15px;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ── Header ─────────────────────────────────────────────────────── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 2px 18px;
+}
+.wordmark {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: -.01em;
+}
+.btn-sync {
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 6px 18px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity .15s;
+}
+.btn-sync:active { opacity: 0.75; }
+.btn-sync:disabled { opacity: 0.5; cursor: default; }
+
+/* ── Status bar ──────────────────────────────────────────────────── */
+#status-bar {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: center;
+  margin: -10px 0 14px;
+  min-height: 1.2em;
+}
+#status-bar.error { color: var(--neg); }
+
+/* ── Two numbers ─────────────────────────────────────────────────── */
+.numbers-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.number-card {
+  background: var(--card);
+  border-radius: var(--r);
+  padding: 18px 14px 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.07);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.n-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.n-amount {
+  font-size: 1.55rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -.02em;
+}
+.n-sub {
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* ── Card ────────────────────────────────────────────────────────── */
+.card {
+  background: var(--card);
+  border-radius: var(--r);
+  padding: 16px 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.07);
+}
+.card h2 {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.h2-note {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.section-head h2 { margin-bottom: 0; }
+
+/* ── Breakdown ───────────────────────────────────────────────────── */
+.breakdown { padding-bottom: 12px; }
+.b-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 0;
+  font-size: 0.88rem;
+  border-bottom: 1px solid var(--border);
+}
+.b-row:last-child { border-bottom: none; }
+
+/* ── List rows (commitments + income) ────────────────────────────── */
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.list-row:last-of-type { border-bottom: none; }
+
+.row-index {
+  min-width: 20px;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.row-index.letter { color: var(--blue); }
+
+.edit-desc {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 0.93rem;
+  color: var(--text);
+  background: transparent;
+  padding: 0;
+  min-width: 0;
+}
+.edit-desc:focus {
+  background: #f0f4ff;
+  border-radius: 6px;
+  padding: 2px 5px;
+  margin: -2px -5px;
+}
+
+.row-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.currency-prefix {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.edit-amt {
+  width: 60px;
+  border: none;
+  outline: none;
+  font-size: 0.93rem;
+  font-weight: 600;
+  color: var(--text);
+  background: transparent;
+  padding: 0;
+  text-align: right;
+}
+.edit-amt:focus {
+  background: #f0f4ff;
+  border-radius: 6px;
+  padding: 2px 4px;
+}
+
+/* ── Badges ──────────────────────────────────────────────────────── */
+.badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  flex-shrink: 0;
+}
+.badge-est { background: #ebebf0; color: var(--muted); }
+.badge-ok  { background: #d4edda; color: var(--pos); }
+
+/* ── Delete button ───────────────────────────────────────────────── */
+.btn-del {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 3px;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-del:active { color: var(--neg); }
+
+/* ── Toggle / add buttons ────────────────────────────────────────── */
+.btn-toggle {
+  background: none;
+  border: none;
+  color: var(--blue);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Add forms ───────────────────────────────────────────────────── */
+.add-form {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.add-form.hidden { display: none; }
+.add-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.add-row input[type="text"],
+.add-row input[type="number"] {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-size: 0.9rem;
+  background: var(--bg);
+  outline: none;
+  min-width: 0;
+}
+.add-row input:focus { border-color: var(--blue); }
+.add-row input[type="number"] { max-width: 90px; }
+.btn-save {
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-save:active { opacity: 0.8; }
+
+/* ── Transactions ────────────────────────────────────────────────── */
+.filter-account {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: 0.82rem;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  cursor: pointer;
+  max-width: 130px;
+}
+.filter-account:focus { border-color: var(--blue); }
+
+.txn-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+}
+.txn-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+.txn-row:last-child { border-bottom: none; }
+.txn-pending { opacity: 0.55; }
+
+.txn-left {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.txn-date {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.txn-name {
+  font-size: 0.88rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.txn-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.txn-account {
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 90px;
+}
+.txn-amount {
+  font-size: 0.88rem;
+  font-weight: 600;
+  min-width: 52px;
+  text-align: right;
+}
+
+.tag-input {
+  width: 36px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 5px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--blue);
+  background: transparent;
+  outline: none;
+  text-transform: uppercase;
+}
+.tag-input:focus { border-color: var(--blue); background: #f0f4ff; }
+.tag-input::placeholder { color: var(--border); font-weight: 400; }
+
+/* ── Utility ─────────────────────────────────────────────────────── */
+.pos   { color: var(--pos); }
+.neg   { color: var(--neg); }
+.muted { color: var(--muted); }
+.empty { font-size: 0.85rem; color: var(--muted); padding: 6px 0; }
+.hidden { display: none !important; }
+
+.page-foot {
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--muted);
+  padding: 8px 0 4px;
+}
+
+/* ── Loading skeleton ────────────────────────────────────────────── */
+#loading-msg {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}

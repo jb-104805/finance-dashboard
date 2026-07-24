@@ -1,0 +1,33 @@
+name: Sync Plaid Data
+
+on:
+  schedule:
+    # 7 AM, 11 AM, 3 PM, 9 PM Mountain Time (MDT = UTC-6)
+    - cron: "0 13,17,21,3 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Plaid sync
+        env:
+          PLAID_CLIENT_ID:       ${{ secrets.PLAID_CLIENT_ID }}
+          PLAID_PRODUCTION_SECRET: ${{ secrets.PLAID_PRODUCTION_SECRET }}
+          ENCRYPTION_KEY:        ${{ secrets.ENCRYPTION_KEY }}
+          GIST_ID:               ${{ secrets.GIST_ID }}
+          GH_TOKEN:              ${{ secrets.GH_TOKEN }}
+        run: python sync.py
