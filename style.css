@@ -385,6 +385,27 @@ header {
   padding: 8px 0 4px;
 }
 
+/* ── Collapsible sections ────────────────────────────────────────── */
+.section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.section-toggle h2 { margin-bottom: 0; }
+.chevron {
+  font-size: 0.75rem;
+  color: var(--muted);
+  display: inline-block;
+  transition: transform .2s ease;
+  line-height: 1;
+}
+.chevron.up { transform: rotate(-90deg); }
+.section-body { overflow: hidden; }
+.section-body.collapsed { display: none; }
+
 /* ── Loading skeleton ────────────────────────────────────────────── */
 #loading-msg {
   text-align: center;

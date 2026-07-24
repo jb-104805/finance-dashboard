@@ -176,13 +176,21 @@ function renderNumbers() {
 }
 
 function renderBreakdown() {
+  const collapsed = isCollapsed('breakdown');
   const rows = [
     `<div class="b-row"><span>Checking</span><span class="pos">${fmt(state.checking || 0)}</span></div>`,
     ...(state.cc_cards || []).map(c =>
       `<div class="b-row"><span>${escHtml(c.name)}</span><span class="neg">-${fmt(c.balance)}</span></div>`
     ),
-  ].join('');
-  document.getElementById('breakdown').innerHTML = rows || '<div class="b-row"><span class="muted">No accounts found.</span></div>';
+  ].join('') || '<div class="b-row"><span class="muted">No accounts found.</span></div>';
+  document.getElementById('breakdown').innerHTML = `
+    <div class="section-head">
+      <div class="section-toggle" onclick="toggleSection('breakdown')">
+        <h2>Accounts</h2>
+        <span class="chevron ${collapsed ? 'up' : ''}" id="chev-breakdown">▾</span>
+      </div>
+    </div>
+    <div class="section-body ${collapsed ? 'collapsed' : ''}" id="body-breakdown">${rows}</div>`;
 }
 
 function renderCommitments() {
@@ -206,17 +214,23 @@ function renderCommitments() {
     </div>`;
   }).join('');
 
+  const collC = isCollapsed('commitments');
   document.getElementById('commitments-card').innerHTML = `
     <div class="section-head">
-      <h2>Commitments</h2>
+      <div class="section-toggle" onclick="toggleSection('commitments')">
+        <h2>Commitments</h2>
+        <span class="chevron ${collC ? 'up' : ''}" id="chev-commitments">▾</span>
+      </div>
       <button class="btn-toggle" onclick="toggleForm('add-commitment')">+ Add</button>
     </div>
-    ${items || '<p class="empty">No commitments yet.</p>'}
-    <div id="add-commitment" class="add-form hidden">
-      <div class="add-row">
-        <input type="text" id="new-comm-desc" placeholder="Description">
-        <input type="number" id="new-comm-amt" placeholder="Amount" step="0.01" min="0">
-        <button class="btn-save" onclick="addItem('commitments')">Save</button>
+    <div class="section-body ${collC ? 'collapsed' : ''}" id="body-commitments">
+      ${items || '<p class="empty">No commitments yet.</p>'}
+      <div id="add-commitment" class="add-form hidden">
+        <div class="add-row">
+          <input type="text" id="new-comm-desc" placeholder="Description">
+          <input type="number" id="new-comm-amt" placeholder="Amount" step="0.01" min="0">
+          <button class="btn-save" onclick="addItem('commitments')">Save</button>
+        </div>
       </div>
     </div>`;
 }
@@ -242,17 +256,23 @@ function renderIncome() {
     </div>`;
   }).join('');
 
+  const collI = isCollapsed('income');
   document.getElementById('income-card').innerHTML = `
     <div class="section-head">
-      <h2>Income</h2>
+      <div class="section-toggle" onclick="toggleSection('income')">
+        <h2>Income</h2>
+        <span class="chevron ${collI ? 'up' : ''}" id="chev-income">▾</span>
+      </div>
       <button class="btn-toggle" onclick="toggleForm('add-income')">+ Add</button>
     </div>
-    ${items || '<p class="empty">No income entries yet.</p>'}
-    <div id="add-income" class="add-form hidden">
-      <div class="add-row">
-        <input type="text" id="new-inc-desc" placeholder="Description">
-        <input type="number" id="new-inc-amt" placeholder="Amount" step="0.01" min="0">
-        <button class="btn-save" onclick="addItem('income')">Save</button>
+    <div class="section-body ${collI ? 'collapsed' : ''}" id="body-income">
+      ${items || '<p class="empty">No income entries yet.</p>'}
+      <div id="add-income" class="add-form hidden">
+        <div class="add-row">
+          <input type="text" id="new-inc-desc" placeholder="Description">
+          <input type="number" id="new-inc-amt" placeholder="Amount" step="0.01" min="0">
+          <button class="btn-save" onclick="addItem('income')">Save</button>
+        </div>
       </div>
     </div>`;
 }
@@ -290,20 +310,26 @@ function renderTransactions() {
     </div>`;
   }).join('');
 
+  const collT = isCollapsed('transactions');
   document.getElementById('transactions-card').innerHTML = `
     <div class="section-head">
-      <h2>Transactions <span class="h2-note">last 45 days</span></h2>
+      <div class="section-toggle" onclick="toggleSection('transactions')">
+        <h2>Transactions <span class="h2-note">last 45 days</span></h2>
+        <span class="chevron ${collT ? 'up' : ''}" id="chev-transactions">▾</span>
+      </div>
       <select class="filter-account" id="account-filter" onchange="filterTransactions()">
         ${options}
       </select>
     </div>
-    <div class="txn-header">
-      <span>Date · Merchant</span>
-      <span>Account · Amount · Tag</span>
-    </div>
-    ${rows || '<p class="empty">No transactions in the last 45 days.</p>'}
-    <div class="page-foot" style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px;">
-      Last synced: ${syncedFmt}
+    <div class="section-body ${collT ? 'collapsed' : ''}" id="body-transactions">
+      <div class="txn-header">
+        <span>Date · Merchant</span>
+        <span>Account · Amount · Tag</span>
+      </div>
+      ${rows || '<p class="empty">No transactions in the last 45 days.</p>'}
+      <div class="page-foot" style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px;">
+        Last synced: ${syncedFmt}
+      </div>
     </div>`;
 }
 
@@ -502,6 +528,19 @@ async function deleteItem(type, id) {
 
 function toggleForm(id) {
   document.getElementById(id)?.classList.toggle('hidden');
+}
+
+function isCollapsed(key) {
+  return localStorage.getItem('collapsed_' + key) === '1';
+}
+
+function toggleSection(key) {
+  const collapsed = isCollapsed(key);
+  localStorage.setItem('collapsed_' + key, collapsed ? '0' : '1');
+  const body    = document.getElementById('body-' + key);
+  const chevron = document.getElementById('chev-' + key);
+  if (body)    body.classList.toggle('collapsed', !collapsed);
+  if (chevron) chevron.classList.toggle('up', !collapsed);
 }
 
 function filterTransactions() {
