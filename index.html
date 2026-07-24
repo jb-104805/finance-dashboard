@@ -10,7 +10,10 @@
 
 <header>
   <span class="wordmark">Finance</span>
-  <button class="btn-sync" id="sync-btn" onclick="triggerSync()">Sync</button>
+  <div style="display:flex;gap:8px;">
+    <button class="btn-refresh" onclick="refreshData()">Refresh</button>
+    <button class="btn-sync" id="sync-btn" onclick="triggerSync()">Sync</button>
+  </div>
 </header>
 
 <div id="status-bar"></div>
@@ -342,6 +345,18 @@ function render() {
 }
 
 // ── Load ──────────────────────────────────────────────────────────────────────
+
+async function refreshData() {
+  if (!state) return;
+  setStatus('Refreshing…');
+  try {
+    state = await fetchState();
+    render();
+    setStatus('');
+  } catch (e) {
+    setStatus('Refresh failed: ' + e.message, true);
+  }
+}
 
 async function loadDashboard() {
   if (!getPAT() || !getGistId()) {

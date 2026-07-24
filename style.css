@@ -50,6 +50,18 @@ header {
 }
 .btn-sync:active { opacity: 0.75; }
 .btn-sync:disabled { opacity: 0.5; cursor: default; }
+.btn-refresh {
+  background: transparent;
+  color: var(--blue);
+  border: 1.5px solid var(--blue);
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-refresh:active { opacity: 0.75; }
 
 /* ── Status bar ──────────────────────────────────────────────────── */
 #status-bar {
