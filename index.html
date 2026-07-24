@@ -36,33 +36,34 @@
   <section class="card" id="transactions-card"></section>
 
   <div class="page-foot">Tags: numbers (1, 2 …) link to commitments · letters (A, B …) link to income</div>
-  <div class="page-foot"><a href="#" onclick="resetPAT();return false;" style="color:var(--muted);">Reset saved token</a></div>
+  <div class="page-foot"><a href="#" onclick="resetCredentials();return false;" style="color:var(--muted);">Reset saved token</a></div>
 </div>
 
 <script>
 // ─────────────────────────────────────────────────────────────────────────────
-// CONFIG — fill these in after running setup.py
+// CONFIG — non-sensitive repo identifiers only. No secrets here.
 // ─────────────────────────────────────────────────────────────────────────────
 const CONFIG = {
-  GIST_ID:    "4d4ade316c356039cd5728467220df3f",
   REPO_OWNER: "jb-104805",
   REPO_NAME:  "finance-dashboard",
 };
+
+function getGistId() {
+  return localStorage.getItem('gh_gist_id') || '';
+}
 
 function getPAT() {
   return localStorage.getItem('gh_pat') || '';
 }
 
-function promptForPAT() {
-  const pat = prompt(
-    'Enter your GitHub Personal Access Token.\n' +
-    'It will be saved on this device only and never sent anywhere except GitHub.'
-  );
-  if (pat && pat.trim()) {
-    localStorage.setItem('gh_pat', pat.trim());
-    return pat.trim();
-  }
-  return '';
+function promptForCredentials() {
+  const gistId = prompt('Enter your Gist ID:\n(printed by setup.py — looks like a 32-character hex string)');
+  if (!gistId || !gistId.trim()) return false;
+  const pat = prompt('Enter your GitHub Personal Access Token:\n(saved on this device only, never stored in the repo)');
+  if (!pat || !pat.trim()) return false;
+  localStorage.setItem('gh_gist_id', gistId.trim());
+  localStorage.setItem('gh_pat', pat.trim());
+  return true;
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -137,7 +138,7 @@ function displayTxns() {
 // ── Gist API ─────────────────────────────────────────────────────────────────
 
 async function fetchState() {
-  const r = await fetch(`https://api.github.com/gists/${CONFIG.GIST_ID}`, {
+  const r = await fetch(`https://api.github.com/gists/${getGistId()}`, {
     headers: { Authorization: `token ${getPAT()}` },
     cache: 'no-store',
   });
@@ -147,7 +148,7 @@ async function fetchState() {
 }
 
 async function patchGist() {
-  const r = await fetch(`https://api.github.com/gists/${CONFIG.GIST_ID}`, {
+  const r = await fetch(`https://api.github.com/gists/${getGistId()}`, {
     method: 'PATCH',
     headers: {
       Authorization: `token ${getPAT()}`,
@@ -317,10 +318,10 @@ function render() {
 // ── Load ──────────────────────────────────────────────────────────────────────
 
 async function loadDashboard() {
-  if (!getPAT()) {
-    const pat = promptForPAT();
-    if (!pat) {
-      document.getElementById('loading-msg').textContent = 'A GitHub token is required. Refresh the page to try again.';
+  if (!getPAT() || !getGistId()) {
+    const ok = promptForCredentials();
+    if (!ok) {
+      document.getElementById('loading-msg').textContent = 'Credentials required. Refresh the page to try again.';
       return;
     }
   }
@@ -336,8 +337,9 @@ async function loadDashboard() {
   }
 }
 
-function resetPAT() {
+function resetCredentials() {
   localStorage.removeItem('gh_pat');
+  localStorage.removeItem('gh_gist_id');
   location.reload();
 }
 
