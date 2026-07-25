@@ -367,7 +367,10 @@ function renderPurchases() {
         <h2>Purchases</h2>
         <span class="chevron ${collP ? 'up' : ''}" id="chev-purchases">▾</span>
       </div>
-      <button class="btn-toggle" onclick="toggleForm('add-purchase')">+ Add</button>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button class="btn-toggle" style="color:var(--neg)" onclick="clearPurchases()">Clear all</button>
+        <button class="btn-toggle" onclick="toggleForm('add-purchase')">+ Add</button>
+      </div>
     </div>
     <div class="section-body ${collP ? 'collapsed' : ''}" id="body-purchases">
       ${items || '<p class="empty">No planned purchases yet.</p>'}
@@ -551,6 +554,17 @@ async function saveIncomeAmt(id, value) {
 }
 
 // ── Interaction: purchases ────────────────────────────────────────────────────
+
+async function clearPurchases() {
+  if (!(state.purchases || []).length) return;
+  if (!confirm('Clear all purchases?')) return;
+  state.purchases = [];
+  try {
+    await patchGist();
+    renderPurchases();
+    renderNumbers();
+  } catch (e) { setStatus('Save failed: ' + e.message, true); }
+}
 
 async function savePurchaseDesc(id, value) {
   const p = (state.purchases || []).find(p => p.id === id);
