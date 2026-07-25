@@ -36,9 +36,10 @@
   <section class="card breakdown" id="breakdown"></section>
   <section class="card" id="commitments-card"></section>
   <section class="card" id="income-card"></section>
+  <section class="card" id="purchases-card"></section>
   <section class="card" id="transactions-card"></section>
 
-  <div class="page-foot">Tags: numbers (1, 2 …) link to commitments · letters (A, B …) link to income</div>
+  <div class="page-foot">Tags: 1 2 3… → Budget · A B C… → Income · A1 A2 A3… → Purchases</div>
   <div class="page-foot"><a href="#" onclick="resetCredentials();return false;" style="color:var(--muted);">Reset saved token</a></div>
 </div>
 
@@ -118,6 +119,9 @@ function calcProjected() {
   });
   (state.income || []).forEach((inc, i) => {
     if (!isVerified(String.fromCharCode(65 + i))) pendingIn += inc.amount;
+  });
+  (state.purchases || []).forEach((p, i) => {
+    if (!isVerified(`A${i + 1}`)) pendingOut += p.amount;
   });
   return now + pendingIn - pendingOut;
 }
@@ -221,7 +225,7 @@ function renderCommitments() {
   document.getElementById('commitments-card').innerHTML = `
     <div class="section-head">
       <div class="section-toggle" onclick="toggleSection('commitments')">
-        <h2>Commitments</h2>
+        <h2>Budget</h2>
         <span class="chevron ${collC ? 'up' : ''}" id="chev-commitments">▾</span>
       </div>
       <button class="btn-toggle" onclick="toggleForm('add-commitment')">+ Add</button>
@@ -336,11 +340,53 @@ function renderTransactions() {
     </div>`;
 }
 
+function renderPurchases() {
+  const items = (state.purchases || []).map((p, i) => {
+    const tag   = `A${i + 1}`;
+    const ok    = isVerified(tag);
+    const badge = ok ? '<span class="badge badge-ok">✓</span>' : '<span class="badge badge-est">est</span>';
+    return `
+    <div class="list-row">
+      <span class="row-index" style="color:var(--neg)">${tag}</span>
+      <input class="edit-desc" type="text" value="${escHtml(p.description)}"
+             onblur="savePurchaseDesc(${p.id}, this.value)">
+      <div class="row-right">
+        <span class="currency-prefix">$</span>
+        <input class="edit-amt" type="text" inputmode="decimal" value="${p.amount.toFixed(0)}"
+               onblur="savePurchaseAmt(${p.id}, this.value)">
+        ${badge}
+        <button class="btn-del" onclick="deleteItem('purchases', ${p.id})">×</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  const collP = isCollapsed('purchases');
+  document.getElementById('purchases-card').innerHTML = `
+    <div class="section-head">
+      <div class="section-toggle" onclick="toggleSection('purchases')">
+        <h2>Purchases</h2>
+        <span class="chevron ${collP ? 'up' : ''}" id="chev-purchases">▾</span>
+      </div>
+      <button class="btn-toggle" onclick="toggleForm('add-purchase')">+ Add</button>
+    </div>
+    <div class="section-body ${collP ? 'collapsed' : ''}" id="body-purchases">
+      ${items || '<p class="empty">No planned purchases yet.</p>'}
+      <div id="add-purchase" class="add-form hidden">
+        <div class="add-row">
+          <input type="text" id="new-purch-desc" placeholder="Description">
+          <input type="number" id="new-purch-amt" placeholder="Amount" step="0.01" min="0">
+          <button class="btn-save" onclick="addItem('purchases')">Save</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 function render() {
   renderNumbers();
   renderBreakdown();
   renderCommitments();
   renderIncome();
+  renderPurchases();
   renderTransactions();
 }
 
@@ -504,37 +550,62 @@ async function saveIncomeAmt(id, value) {
   } catch (e) { setStatus('Save failed: ' + e.message, true); }
 }
 
+// ── Interaction: purchases ────────────────────────────────────────────────────
+
+async function savePurchaseDesc(id, value) {
+  const p = (state.purchases || []).find(p => p.id === id);
+  if (!p || p.description === value.trim()) return;
+  p.description = value.trim();
+  try { await patchGist(); } catch (e) { setStatus('Save failed: ' + e.message, true); }
+}
+
+async function savePurchaseAmt(id, value) {
+  const p   = (state.purchases || []).find(p => p.id === id);
+  const amt = parseFloat(value);
+  if (!p || isNaN(amt)) return;
+  p.amount = amt;
+  try {
+    await patchGist();
+    renderNumbers();
+  } catch (e) { setStatus('Save failed: ' + e.message, true); }
+}
+
 // ── Add / delete items ────────────────────────────────────────────────────────
 
 async function addItem(type) {
-  const isComm   = type === 'commitments';
-  const descEl   = document.getElementById(isComm ? 'new-comm-desc' : 'new-inc-desc');
-  const amtEl    = document.getElementById(isComm ? 'new-comm-amt'  : 'new-inc-amt');
-  const desc     = descEl.value.trim();
-  const amt      = parseFloat(amtEl.value);
+  const ids = {
+    commitments: ['new-comm-desc',  'new-comm-amt'],
+    income:      ['new-inc-desc',   'new-inc-amt'],
+    purchases:   ['new-purch-desc', 'new-purch-amt'],
+  };
+  const renders = { commitments: renderCommitments, income: renderIncome, purchases: renderPurchases };
+  const [descId, amtId] = ids[type] || [];
+  const descEl = document.getElementById(descId);
+  const amtEl  = document.getElementById(amtId);
+  const desc   = descEl?.value.trim();
+  const amt    = parseFloat(amtEl?.value);
   if (!desc || isNaN(amt) || amt < 0) return;
 
-  const list    = state[type] || [];
-  const nextId  = list.length ? Math.max(...list.map(x => x.id)) + 1 : 1;
-  const key     = isComm ? 'amount' : 'amount';
+  const list   = state[type] || [];
+  const nextId = list.length ? Math.max(...list.map(x => x.id)) + 1 : 1;
   list.push({ id: nextId, description: desc, amount: amt });
-  state[type]   = list;
-
+  state[type]  = list;
   descEl.value = '';
   amtEl.value  = '';
 
   try {
     await patchGist();
-    isComm ? renderCommitments() : renderIncome();
+    renders[type]?.();
     renderNumbers();
   } catch (e) { setStatus('Save failed: ' + e.message, true); }
 }
 
 async function deleteItem(type, id) {
+  const renders = { commitments: renderCommitments, income: renderIncome, purchases: renderPurchases };
   state[type] = (state[type] || []).filter(x => x.id !== id);
   try {
     await patchGist();
-    type === 'commitments' ? renderCommitments() : renderIncome();
+    renders[type]?.();
     renderNumbers();
   } catch (e) { setStatus('Save failed: ' + e.message, true); }
 }
