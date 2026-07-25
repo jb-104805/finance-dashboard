@@ -184,11 +184,19 @@ function renderNumbers() {
 
 function renderBreakdown() {
   const collapsed = isCollapsed('breakdown');
+  const ccTotal = (state.cc_cards || []).reduce((s, c) => s + c.balance, 0);
+  const ccRows  = (state.cc_cards || []).map(c =>
+    `<div class="b-row"><span>${escHtml(c.name)}</span><span class="neg">-${fmt(c.balance)}</span></div>`
+  );
+  const totalRow = ccRows.length
+    ? `<div class="b-row" style="border-top:2px solid var(--border);font-weight:600;">
+         <span>Total CC Balance</span><span class="neg">-${fmt(ccTotal)}</span>
+       </div>`
+    : '';
   const rows = [
     `<div class="b-row"><span>Checking</span><span class="pos">${fmt(state.checking || 0)}</span></div>`,
-    ...(state.cc_cards || []).map(c =>
-      `<div class="b-row"><span>${escHtml(c.name)}</span><span class="neg">-${fmt(c.balance)}</span></div>`
-    ),
+    ...ccRows,
+    totalRow,
   ].join('') || '<div class="b-row"><span class="muted">No accounts found.</span></div>';
   document.getElementById('breakdown').innerHTML = `
     <div class="section-head">
