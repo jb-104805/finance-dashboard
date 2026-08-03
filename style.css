@@ -418,6 +418,24 @@ header {
 .section-body { overflow: hidden; }
 .section-body.collapsed { display: none; }
 
+/* ── Relink alert ────────────────────────────────────────────────── */
+.relink-alert {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: var(--r);
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  color: #7d5200;
+  margin-bottom: 12px;
+  line-height: 1.45;
+}
+.relink-alert code {
+  font-family: monospace;
+  background: rgba(0,0,0,.07);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
 /* ── Loading skeleton ────────────────────────────────────────────── */
 #loading-msg {
   text-align: center;

@@ -71,6 +71,7 @@ def sync_transactions(state: dict) -> None:
     """Cursor-based incremental sync for all institutions."""
     txns    = {t["id"]: t for t in state.get("transactions", [])}
     cursors = dict(state.get("cursors", {}))
+    relink  = set(state.get("relink_needed", []))
 
     for enc_token in state.get("tokens", []):
         try:
@@ -79,9 +80,10 @@ def sync_transactions(state: dict) -> None:
             print(f"  Decrypt error: {e}")
             continue
 
-        h      = _hash(enc_token)
-        cursor = cursors.get(h, "")
+        h       = _hash(enc_token)
+        cursor  = cursors.get(h, "")
         added = modified = removed = 0
+        success = False
 
         while True:
             try:
@@ -92,6 +94,7 @@ def sync_transactions(state: dict) -> None:
                 body = getattr(e, "body", "") or ""
                 if "ITEM_LOGIN_REQUIRED" in str(body):
                     print(f"  {h[:8]}: ITEM_LOGIN_REQUIRED — run link_account.py to re-authenticate this institution")
+                    relink.add(h)
                 else:
                     print(f"  {h[:8]}: sync error — {e}")
                 break
@@ -127,20 +130,26 @@ def sync_transactions(state: dict) -> None:
 
             cursor = resp.next_cursor
             if not resp.has_more:
+                success = True
                 break
 
         cursors[h] = cursor
+        if success:
+            relink.discard(h)
         print(f"  {h[:8]}: +{added} added  {modified} modified  {removed} removed")
 
     cutoff = (date.today() - timedelta(days=365)).isoformat()
-    state["transactions"] = [t for t in txns.values() if t["date"] >= cutoff]
-    state["cursors"]      = cursors
+    state["transactions"]  = [t for t in txns.values() if t["date"] >= cutoff]
+    state["cursors"]       = cursors
+    state["relink_needed"] = list(relink)
 
 
 def sync_balances(state: dict) -> None:
     """Fetch live balances and update account metadata."""
-    acct_map  = {a["id"]: a for a in state.get("accounts", [])}
-    live_bals = {}
+    acct_map    = {a["id"]: a for a in state.get("accounts", [])}
+    live_bals   = {}
+    relink      = set(state.get("relink_needed", []))
+    token_accts = dict(state.get("token_accounts", {}))
 
     for enc_token in state.get("tokens", []):
         try:
@@ -148,13 +157,22 @@ def sync_balances(state: dict) -> None:
         except Exception:
             continue
 
+        h = _hash(enc_token)
         try:
             resp = client.accounts_balance_get(
                 AccountsBalanceGetRequest(access_token=access_token)
             )
         except Exception as e:
-            print(f"  Balance error: {e}")
+            body = getattr(e, "body", "") or ""
+            if "ITEM_LOGIN_REQUIRED" in str(body):
+                print(f"  {h[:8]}: ITEM_LOGIN_REQUIRED (balances)")
+                relink.add(h)
+            else:
+                print(f"  Balance error: {e}")
             continue
+
+        token_accts[h] = [acct.name for acct in resp.accounts]
+        relink.discard(h)
 
         for acct in resp.accounts:
             current   = acct.balances.current
@@ -188,8 +206,10 @@ def sync_balances(state: dict) -> None:
         elif acct.get("type") == "credit":
             cc_cards.append({"name": acct["name"], "balance": bal})
 
-    state["checking"] = checking
-    state["cc_cards"] = sorted(cc_cards, key=lambda x: x["name"])
+    state["checking"]       = checking
+    state["cc_cards"]       = sorted(cc_cards, key=lambda x: x["name"])
+    state["relink_needed"]  = list(relink)
+    state["token_accounts"] = token_accts
 
 
 def main():

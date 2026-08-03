@@ -17,6 +17,7 @@
 </header>
 
 <div id="status-bar"></div>
+<div id="relink-alert" class="hidden"></div>
 <div id="loading-msg">Loading…</div>
 <div id="main" class="hidden">
 
@@ -392,7 +393,19 @@ function renderPurchases() {
     </div>`;
 }
 
+function renderRelinkAlert() {
+  const el = document.getElementById('relink-alert');
+  const needed = state.relink_needed || [];
+  if (!needed.length) { el.className = 'hidden'; return; }
+  const tokenAccts = state.token_accounts || {};
+  const names = needed.flatMap(h => tokenAccts[h] || [h.slice(0,8)]);
+  const unique = [...new Set(names)].join(', ');
+  el.className = 'relink-alert';
+  el.innerHTML = `⚠️ Account relink required: <strong>${unique}</strong> — run <code>link_account.py</code> to restore sync.`;
+}
+
 function render() {
+  renderRelinkAlert();
   renderNumbers();
   renderBreakdown();
   renderCommitments();
