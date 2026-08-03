@@ -157,7 +157,13 @@ def sync_balances(state: dict) -> None:
             continue
 
         for acct in resp.accounts:
-            live_bals[acct.account_id] = acct.balances.current or 0.0
+            current   = acct.balances.current
+            available = acct.balances.available
+            limit     = acct.balances.limit
+            acct_type = acct.type.value if hasattr(acct.type, "value") else str(acct.type)
+            if acct_type == "credit" and not current and available is not None and limit is not None:
+                current = limit - available  # Plaid reports last-statement $0 but new charges exist
+            live_bals[acct.account_id] = current or 0.0
 
             if acct.account_id not in acct_map:
                 print(f"  New account discovered: {acct.name} — defaulting to included")
