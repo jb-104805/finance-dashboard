@@ -84,9 +84,17 @@ def sync_transactions(state: dict) -> None:
         added = modified = removed = 0
 
         while True:
-            resp = client.transactions_sync(
-                TransactionsSyncRequest(access_token=access_token, cursor=cursor, count=500)
-            )
+            try:
+                resp = client.transactions_sync(
+                    TransactionsSyncRequest(access_token=access_token, cursor=cursor, count=500)
+                )
+            except Exception as e:
+                body = getattr(e, "body", "") or ""
+                if "ITEM_LOGIN_REQUIRED" in str(body):
+                    print(f"  {h[:8]}: ITEM_LOGIN_REQUIRED — run link_account.py to re-authenticate this institution")
+                else:
+                    print(f"  {h[:8]}: sync error — {e}")
+                break
 
             for txn in resp.added:
                 txns[txn.transaction_id] = {
