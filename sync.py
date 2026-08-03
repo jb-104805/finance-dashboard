@@ -96,7 +96,9 @@ def sync_transactions(state: dict) -> None:
                     print(f"  {h[:8]}: ITEM_LOGIN_REQUIRED — run link_account.py to re-authenticate this institution")
                     relink.add(h)
                 else:
+                    msg = f"transactions {h[:8]}: {e}"
                     print(f"  {h[:8]}: sync error — {e}")
+                    state.setdefault("sync_errors", []).append(msg)
                 break
 
             for txn in resp.added:
@@ -168,7 +170,9 @@ def sync_balances(state: dict) -> None:
                 print(f"  {h[:8]}: ITEM_LOGIN_REQUIRED (balances)")
                 relink.add(h)
             else:
+                msg = f"balances {h[:8]}: {e}"
                 print(f"  Balance error: {e}")
+                state.setdefault("sync_errors", []).append(msg)
             continue
 
         token_accts[h] = [acct.name for acct in resp.accounts]
@@ -215,6 +219,8 @@ def sync_balances(state: dict) -> None:
 def main():
     print("Loading state from Gist...")
     state = load_state()
+
+    state["sync_errors"] = []
 
     print("Syncing transactions...")
     sync_transactions(state)

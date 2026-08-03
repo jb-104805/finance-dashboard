@@ -17,7 +17,7 @@
 </header>
 
 <div id="status-bar"></div>
-<div id="relink-alert" class="hidden"></div>
+<div id="alerts"></div>
 <div id="loading-msg">Loading…</div>
 <div id="main" class="hidden">
 
@@ -393,19 +393,38 @@ function renderPurchases() {
     </div>`;
 }
 
-function renderRelinkAlert() {
-  const el = document.getElementById('relink-alert');
+function renderAlerts() {
+  const el = document.getElementById('alerts');
+  const items = [];
+
+  // Relink needed
   const needed = state.relink_needed || [];
-  if (!needed.length) { el.className = 'hidden'; return; }
-  const tokenAccts = state.token_accounts || {};
-  const names = needed.flatMap(h => tokenAccts[h] || [h.slice(0,8)]);
-  const unique = [...new Set(names)].join(', ');
-  el.className = 'relink-alert';
-  el.innerHTML = `⚠️ Account relink required: <strong>${unique}</strong> — run <code>link_account.py</code> to restore sync.`;
+  if (needed.length) {
+    const tokenAccts = state.token_accounts || {};
+    const names = [...new Set(needed.flatMap(h => tokenAccts[h] || [h.slice(0, 8)]))].join(', ');
+    items.push(`⚠️ Account relink required: <strong>${names}</strong> — run <code>link_account.py</code> to restore sync.`);
+  }
+
+  // Stale data (>13 hours since last sync)
+  if (state.synced_at) {
+    const ageHours = (Date.now() - new Date(state.synced_at).getTime()) / 3600000;
+    if (ageHours > 13) {
+      const h = Math.round(ageHours);
+      items.push(`🕐 Data is <strong>${h} hours old</strong> — the scheduled sync may have failed. Check GitHub Actions.`);
+    }
+  }
+
+  // Non-fatal sync errors logged by sync.py
+  (state.sync_errors || []).forEach(e => {
+    items.push(`⚠️ Sync error: <code>${escHtml(e)}</code>`);
+  });
+
+  if (!items.length) { el.innerHTML = ''; return; }
+  el.innerHTML = items.map(msg => `<div class="alert-banner">${msg}</div>`).join('');
 }
 
 function render() {
-  renderRelinkAlert();
+  renderAlerts();
   renderNumbers();
   renderBreakdown();
   renderCommitments();
