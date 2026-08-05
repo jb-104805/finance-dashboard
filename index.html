@@ -190,7 +190,7 @@ function renderBreakdown() {
     let label = escHtml(c.name);
     if (c.due_date) {
       const [, m, d] = c.due_date.split('-');
-      label += ` <span class="muted b-meta">· Due ${parseInt(m)}/${parseInt(d)}</span>`;
+      label += ` <span class="muted b-meta">· ${parseInt(m)}/${parseInt(d)}</span>`;
     }
     return `<div class="b-row"><span>${label}</span><span class="neg">-${fmt(c.balance)}</span></div>`;
   });
