@@ -186,9 +186,14 @@ function renderNumbers() {
 function renderBreakdown() {
   const collapsed = isCollapsed('breakdown');
   const ccTotal = (state.cc_cards || []).reduce((s, c) => s + c.balance, 0);
-  const ccRows  = (state.cc_cards || []).map(c =>
-    `<div class="b-row"><span>${escHtml(c.name)}</span><span class="neg">-${fmt(c.balance)}</span></div>`
-  );
+  const ccRows  = (state.cc_cards || []).map(c => {
+    let label = escHtml(c.name);
+    if (c.due_date) {
+      const [, m, d] = c.due_date.split('-');
+      label += ` <span class="muted b-meta">· Due ${parseInt(m)}/${parseInt(d)}</span>`;
+    }
+    return `<div class="b-row"><span>${label}</span><span class="neg">-${fmt(c.balance)}</span></div>`;
+  });
   const totalRow = ccRows.length
     ? `<div class="b-row" style="border-top:2px solid var(--border);font-weight:600;">
          <span>Total CC Balance</span><span class="neg">-${fmt(ccTotal)}</span>

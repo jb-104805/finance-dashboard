@@ -150,6 +150,9 @@ header {
 }
 .b-row:last-child { border-bottom: none; }
 
+/* ── Breakdown meta (due date etc.) ─────────────────────────────── */
+.b-meta { font-size: 0.78rem; font-weight: 400; }
+
 /* ── List rows (commitments + income) ────────────────────────────── */
 .list-row {
   display: flex;

@@ -17,6 +17,7 @@ import plaid
 from plaid.api import plaid_api
 from plaid.model.transactions_sync_request import TransactionsSyncRequest
 from plaid.model.accounts_balance_get_request import AccountsBalanceGetRequest
+from plaid.model.liabilities_get_request import LiabilitiesGetRequest
 
 PLAID_CLIENT_ID = os.environ["PLAID_CLIENT_ID"]
 PLAID_SECRET    = os.environ["PLAID_PRODUCTION_SECRET"]
@@ -208,12 +209,44 @@ def sync_balances(state: dict) -> None:
         if acct.get("subtype") == "checking":
             checking += bal
         elif acct.get("type") == "credit":
-            cc_cards.append({"name": acct["name"], "balance": bal})
+            cc_cards.append({"name": acct["name"], "balance": bal, "id": acct["id"]})
 
     state["checking"]       = checking
     state["cc_cards"]       = sorted(cc_cards, key=lambda x: x["name"])
     state["relink_needed"]  = list(relink)
     state["token_accounts"] = token_accts
+
+
+def sync_liabilities(state: dict) -> None:
+    """Fetch CC due dates; silently skips tokens without liabilities consent."""
+    liab_map = {}  # account_id -> {due_date, last_statement}
+
+    for enc_token in state.get("tokens", []):
+        try:
+            access_token = _decrypt(enc_token)
+        except Exception:
+            continue
+
+        try:
+            resp = client.liabilities_get(LiabilitiesGetRequest(access_token=access_token))
+        except Exception as e:
+            body = getattr(e, "body", "") or ""
+            skip_codes = ("ADDITIONAL_CONSENT_REQUIRED", "PRODUCT_NOT_READY", "ITEM_LOGIN_REQUIRED")
+            if any(c in str(body) for c in skip_codes):
+                continue
+            print(f"  Liabilities error: {e}")
+            continue
+
+        for cc in (resp.liabilities.credit or []):
+            liab_map[cc.account_id] = {
+                "due_date":       str(cc.next_payment_due_date) if cc.next_payment_due_date else None,
+                "last_statement": cc.last_statement_balance,
+            }
+
+    for card in state.get("cc_cards", []):
+        info = liab_map.get(card.get("id"), {})
+        card["due_date"]       = info.get("due_date")
+        card["last_statement"] = info.get("last_statement")
 
 
 def main():
@@ -227,6 +260,9 @@ def main():
 
     print("Syncing balances...")
     sync_balances(state)
+
+    print("Syncing liabilities...")
+    sync_liabilities(state)
 
     state["synced_at"] = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
