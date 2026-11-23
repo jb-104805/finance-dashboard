@@ -19,6 +19,8 @@ import plaid
 from plaid.api import plaid_api
 from plaid.model.link_token_create_request import LinkTokenCreateRequest
 from plaid.model.link_token_create_request_user import LinkTokenCreateRequestUser
+from plaid.model.link_token_create_request_update import LinkTokenCreateRequestUpdate
+from plaid.model.accounts_get_request import AccountsGetRequest
 from plaid.model.country_code import CountryCode
 from plaid.model.products import Products
 
@@ -44,18 +46,28 @@ def _decrypt(enc: str) -> str:
 
 
 def get_institutions():
-    """Return list of (institution_name, encrypted_access_token)."""
+    """Return list of (institution_name, encrypted_access_token, [account names]).
+
+    One entry per connection (access token), so two logins at the same bank
+    (e.g. two Chase logins) show up separately, labelled by their accounts.
+    """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     rows = conn.execute("""
-        SELECT DISTINCT i.name AS inst_name, a.access_token
+        SELECT i.name AS inst_name, a.access_token, a.name AS acct_name
         FROM institutions i
         JOIN accounts a ON a.institution_id = i.id
         WHERE a.access_token IS NOT NULL
-        ORDER BY i.name
+        ORDER BY i.name, a.id
     """).fetchall()
     conn.close()
-    return [(r["inst_name"], r["access_token"]) for r in rows]
+    grouped = {}
+    for r in rows:
+        key = r["access_token"]
+        if key not in grouped:
+            grouped[key] = (r["inst_name"], key, [])
+        grouped[key][2].append(r["acct_name"])
+    return list(grouped.values())
 
 
 def create_link_token(access_token: str) -> str:
@@ -66,8 +78,19 @@ def create_link_token(access_token: str) -> str:
         country_codes=[CountryCode("US")],
         language="en",
         additional_consented_products=[Products("liabilities")],
+        # Lets you tick newly opened accounts (e.g. a new card) during the update.
+        update=LinkTokenCreateRequestUpdate(account_selection_enabled=True),
     ))
     return resp.link_token
+
+
+def print_accounts(access_token: str) -> None:
+    """Show every account this connection now shares, with its Plaid account_id."""
+    resp = client.accounts_get(AccountsGetRequest(access_token=access_token))
+    print("\nAccounts on this connection now:")
+    print(f"  {'Name':<32} {'Type':<12} {'Last 4':<7} Plaid account_id")
+    for a in resp.accounts:
+        print(f"  {a.name[:32]:<32} {str(a.subtype or a.type):<12} {(a.mask or ''):<7} {a.account_id}")
 
 
 # ── Pick institution ──────────────────────────────────────────────────────────
@@ -78,9 +101,9 @@ if not institutions:
     input("Press Enter to exit.")
     raise SystemExit
 
-print("\nLinked institutions:")
-for i, (name, _) in enumerate(institutions, 1):
-    print(f"  {i}. {name}")
+print("\nLinked connections:")
+for i, (name, _, accts) in enumerate(institutions, 1):
+    print(f"  {i}. {name}  ({', '.join(accts)})")
 
 while True:
     try:
@@ -91,7 +114,7 @@ while True:
         pass
     print("  Invalid choice, try again.")
 
-inst_name, enc_token = institutions[choice - 1]
+inst_name, enc_token, _ = institutions[choice - 1]
 print(f"\nCreating update link for {inst_name}...")
 
 try:
@@ -176,5 +199,10 @@ server.start()
 
 done.wait()
 print("\nPlaid Link completed successfully.")
-print("Now tap Sync on your dashboard — the new account will appear automatically.")
+try:
+    print_accounts(access_token)
+except Exception as e:
+    print(f"(Could not list accounts: {e})")
+print("\nNow tap Sync on your dashboard — the new account will appear automatically.")
+print("For the Budget app, new accounts also need adding to its accounts table (ask Claude).")
 input("Press Enter to exit.")
